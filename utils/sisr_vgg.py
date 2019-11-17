@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from tensorflow.keras.layers import Input, Dropout, Dense, Flatten, Activation
-from tensorflow.keras.layers import Conv2D, BatchNormalization, MaxPooling2D
+from tensorflow.keras.layers import Conv2D, BatchNormalization, UpSampling2D
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import SGD, Adam
 from tensorflow.keras.losses import MeanAbsoluteError, MeanSquaredError, CosineSimilarity
@@ -113,8 +113,8 @@ def report_sisr(y_true, y_pred):
 # Create cross validation splits
 def create_splits(iotable, prop=0.2, shuffle=False):
     idxes = np.arange(iotable.shape[0])     # Create indexes
-	if shuffle:    							# Permute indexes if specified
-    	idxes = np.random.permutation(idxes)
+    if shuffle:    							# Permute indexes if specified
+        idxes = np.random.permutation(idxes)
     idx_break = int(len(idxes)*(1-prop))    # Index for the split point
     idx_train = idxes[:idx_break]
     idx_test = idxes[idx_break:]
@@ -145,36 +145,8 @@ def init_model_plaindnn(input_shape):
     # Initialize model
     model = Model(inputs = inputs, outputs = out)
     # Define compile parameters
-    adam = Adam(lr=0.01, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
-    model.compile(loss='mae', optimizer=adam, metrics=['mse','cosine_similarity'])
-    return(model)
-#-----------------------------------------------------------------------
-# The model
-#-----------------------------------------------------------------------
-def init_model_plaindnn(input_shape):
-    """
-    :Return: 
-      Newly initialized model for image up-scaling.
-    :param 
-      int input_shape: The number of variables to use as input features.
-    """
-    # Input layer
-    inputs = Input(shape=input_shape)
-    # blovk1: CONV -> CONV
-    x = BatchNormalization(axis=1)(inputs)
-    x = Conv2D(filters=64, kernel_size=(3,3), activation='relu', name='conv1', padding='same')(x)
-    x = BatchNormalization(axis=1)(x)
-    x = Conv2D(filters=64, kernel_size=(3,3), activation='relu', name='conv2', padding='same')(x)
-    x = Conv2D(filters=64, kernel_size=(3,3), activation='relu', name='conv3', padding='same')(x)
-    # Output block: UP_SAMPLE -> CONV
-    x = UpSampling2D((5, 3), name='upsampple')(x)
-    x = Conv2D(filters=64, kernel_size=(3,3), activation='relu', name='conv4', padding='same')(x)
-    out = BatchNormalization()(x)
-    # Initialize model
-    model = Model(inputs = inputs, outputs = out)
-    # Define compile parameters
     adam = Adam(lr=0.0001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
-    model.compile(loss=['mae','cosine_similarity'], optimizer=adam, metrics=['mse','mae','cosine_similarity'])
+    model.compile(loss='cosine_similarity', optimizer=adam, metrics=['mse','mae','cosine_similarity'])
     return(model)
 
 #-----------------------------------------------------------------------
@@ -211,7 +183,9 @@ def main():
     # Training / testing
     #-------------------------------
     # Model initialization
-    model = init_model_plaindnn((nY, nX))
+    sample = load_sprec(iotab['xuri'].iloc[0:1])[0]
+    print(sample.shape)
+    model = init_model_plaindnn(sample.shape)
     # Debug info
     logging.debug(model.summary())
     logging.info("Training data samples: "+str(len(idx_trains)))
@@ -224,13 +198,14 @@ def main():
     hist = model.fit_generator(data_generator(iotab.iloc[idx_trains,:], args.batch_size), 
     							steps_per_epoch=steps_train, 
     							epochs=args.epochs, 
-    							max_queue_size=args.batch_size64, 
-    							verbose=0)
+    							max_queue_size=args.batch_size, 
+    							verbose=1)
     # Prediction
     y_pred = model.predict_generator(data_generator(iotab.iloc[idx_tests,:], args.batch_size), 
     							steps=steps_test, 
     							max_queue_size=args.batch_size, 
     							verbose=0)
+    y_true = load_sprec(iotab['yuri'].iloc[idx_tests])
     # Prepare output
     report = report_sisr(y_true, y_pred)
     # Output results
