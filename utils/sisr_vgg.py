@@ -171,6 +171,10 @@ def main():
     else:
         logging.basicConfig(level=logging.DEBUG)
     logging.debug(args)
+    # Random seed
+    if not args.random_seed is None:
+        logging.info('Set random seed as: '+str(args.random_seed))
+        tf.random.set_seed(args.random_seed)
     #-------------------------------
     # IO data generation
     #-------------------------------
@@ -209,7 +213,7 @@ def main():
     # Prepare output
     report = report_sisr(y_true, y_pred)
     # Output results
-    pd.DataFrame(hist).to_csv(args.output+'_hist.csv')
+    pd.DataFrame(hist.history).to_csv(args.output+'_hist.csv')
     report.to_csv(args.output+'_report.csv')
     # done
     return(0)
